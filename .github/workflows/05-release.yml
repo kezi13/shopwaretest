@@ -1,0 +1,61 @@
+name: Generate Release Info
+
+on:
+  release:
+    types: [published,edited]
+  workflow_dispatch:
+
+jobs:
+  release:
+      runs-on: ubuntu-latest
+      steps:
+        - name: Checkout repository
+          uses: actions/checkout@v4
+
+        - uses: denoland/setup-deno@v1
+          with:
+            deno-version: 1.29.1
+
+        - name: Generate Release Info
+          run: |
+            mkdir generated
+            cd generated
+            deno run --allow-read --allow-write --allow-net --allow-env ../.github/release_info_generator.ts
+          env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+        - name: AWS Deploy
+          run: aws s3 sync generated s3://releases.s3.shopware.com/changelog
+          env:
+            AWS_ACCESS_KEY_ID: ${{ secrets.RELEASE_INFO_KEY }}
+            AWS_SECRET_ACCESS_KEY: ${{ secrets.RELEASE_INFO_SECRET }}
+            AWS_DEFAULT_REGION: eu-west-1
+
+        - name: Invalidate CloudFront
+          run: aws cloudfront create-invalidation --distribution-id ECVXLYHJ64DVV --paths "/changelog/*"
+          env:
+            AWS_ACCESS_KEY_ID: ${{ secrets.RELEASE_INFO_KEY }}
+            AWS_SECRET_ACCESS_KEY: ${{ secrets.RELEASE_INFO_SECRET }}
+            AWS_DEFAULT_REGION: eu-west-1
+
+        - name: Trigger Store API schema build
+          continue-on-error: true
+          run: |
+            curl \
+            -X POST \
+            -H "Accept: application/vnd.github.everest-preview+json" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            https://api.github.com/repos/shopware/store-api-reference/actions/workflows/manual_versioning.yml/dispatches \
+            -d '{"ref": "latest", "inputs": {"shopware_version": "${{ github.event.release.tag_name }}"}}'
+
+        - name: Trigger Admin API schema build
+          continue-on-error: true
+          run: |
+            curl \
+            -X POST \
+            -H "Accept: application/vnd.github.everest-preview+json" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            https://api.github.com/repos/shopware/admin-api-reference/actions/workflows/manual_versioning.yml/dispatches \
+            -d '{"ref": "latest", "inputs": {"shopware_version": "${{ github.event.release.tag_name }}"}}'

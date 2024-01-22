@@ -1,0 +1,16 @@
+shopware:
+  feature:
+    flags:
+      - name: v6.5.0.0
+        default: true
+        major: true
+      - name: v6.6.0.0
+        default: true
+        major: true
+      - name: v6.7.0.0
+        default: false
+        major: true
+      - name: ASYNC_THEME_COMPILATION
+        default: false
+        major: true
+        description: "Asynchronous theme compilation via message queue - experimental stableVersion:v6.6.0 feature:ASYNC_THEME_COMPILATION"
